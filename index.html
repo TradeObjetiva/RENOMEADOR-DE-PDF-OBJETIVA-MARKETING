@@ -134,6 +134,15 @@
 
       for (const file of files) {
         try {
+          const fileReader = new FileReader();
+          
+          await new Promise((resolve, reject) => {
+            fileReader.onload = (e) => resolve(e.target.result);
+            fileReader.onerror = reject;
+            fileReader.readAsArrayBuffer(file);
+          });
+
+          // Extrair informações do PDF para nomear o arquivo
           const arrayBuffer = await file.arrayBuffer();
           const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
@@ -146,20 +155,15 @@
 
           const { date, value, currencySymbol } = extractDateAndValue(fullText);
 
-          if (!date && !value) {
-            resultList.innerHTML += `<div style="color:#f68">Arquivo <strong>${file.name}</strong>: Não foi possível encontrar data nem valor.</div>`;
-            continue;
-          }
-
           const formattedDate = date ? formatDate(date) : formatDate(new Date());
           const formattedValue = value ? formatValue(value) : 'sem_valor';
           const formattedCurrency = currencySymbol || '';
 
           const newFilename = `${formattedDate}_valor_${formattedCurrency}${formattedValue}.pdf`;
 
-          const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+          // Criar link de download com o arquivo original
           const downloadLink = document.createElement('a');
-          downloadLink.href = URL.createObjectURL(blob);
+          downloadLink.href = URL.createObjectURL(file);
           downloadLink.download = newFilename;
           downloadLink.textContent = `Download: ${newFilename}`;
           downloadLink.style.display = 'block';
