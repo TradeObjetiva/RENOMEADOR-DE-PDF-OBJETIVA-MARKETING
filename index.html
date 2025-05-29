@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Renomeador de PDFs por Data e Valor</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+    body {
+      margin: 0;
+      font-family: 'Roboto', sans-serif;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 2rem;
+      color: #fff;
+    }
+    h1 {
+      margin-bottom: 1rem;
+      font-weight: 700;
+      text-align: center;
+      text-shadow: 0 0 8px rgba(0,0,0,0.3);
+    }
+    .upload-container {
+      background: rgba(255,255,255,0.1);
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+    }
+    input[type=file] {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: none;
+      background: #fff;
+      cursor: pointer;
+      width: 100%;
+      max-width: 400px;
+      font-weight: 500;
+    }
+    button {
+      margin-top: 1.5rem;
+      background: #ff6f61;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      box-shadow: 0 4px 12px rgb(255 111 97 / 0.5);
+    }
+    button:hover:not(:disabled) {
+      background: #ff4436;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 1rem;
+      font-size: 1rem;
+      min-height: 2rem;
+      font-weight: 600;
+      user-select: none;
+    }
+    .result-list {
+      margin-top: 1.5rem;
+      text-align: left;
+      max-height: 300px;
+      overflow-y: auto;
+      background: rgba(255,255,255,0.15);
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+    }
+    .result-list a {
+      color: #ffdede;
+      text-decoration: none;
+      display: block;
+      margin-bottom: 0.5rem;
+      word-break: break-all;
+    }
+    .result-list a:hover {
+      text-decoration: underline;
+    }
+    footer {
+      margin-top: auto;
+      font-size: 0.8rem;
+      color: #ccc;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Renomeador de PDFs por Data e Valor</h1>
+  <div class="upload-container">
+    <input type="file" id="pdfInput" accept="application/pdf" multiple />
+    <button id="processBtn" disabled>Processar PDFs e Renomear</button>
+    <div class="status" id="status"></div>
+    <div class="result-list" id="resultList"></div>
+  </div>
+  <footer>Desenvolvido por um desenvolvedor web ultra experiente</footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.7.107/pdf.worker.min.js';
+
+    const pdfInput = document.getElementById('pdfInput');
+    const processBtn = document.getElementById('processBtn');
+    const statusEl = document.getElementById('status');
+    const resultList = document.getElementById('resultList');
+
+    let files = [];
+
+    pdfInput.addEventListener('change', (e) => {
+      files = Array.from(e.target.files);
+      resultList.innerHTML = '';
+      statusEl.textContent = '';
+      processBtn.disabled = files.length === 0;
+    });
+
+    processBtn.addEventListener('click', async () => {
+      if (files.length === 0) return;
+      processBtn.disabled = true;
+      resultList.innerHTML = '';
+      statusEl.textContent = 'Processando PDFs, aguarde...';
+
+      for (const file of files) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+          let fullText = '';
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            fullText += textContent.items.map(i => i.str).join(' ') + ' ';
+          }
+
+          const { date, value, currencySymbol } = extractDateAndValue(fullText);
+
+          if (!date && !value) {
+            resultList.innerHTML += `<div style="color:#f68">Arquivo <strong>${file.name}</strong>: Não foi possível encontrar data nem valor.</div>`;
+            continue;
+          }
+
+          const formattedDate = date ? formatDate(date) : formatDate(new Date());
+          const formattedValue = value ? formatValue(value) : 'sem_valor';
+          const formattedCurrency = currencySymbol || '';
+
+          const newFilename = `${formattedDate}_valor_${formattedCurrency}${formattedValue}.pdf`;
+
+          const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+          const downloadLink = document.createElement('a');
+          downloadLink.href = URL.createObjectURL(blob);
+          downloadLink.download = newFilename;
+          downloadLink.textContent = `Download: ${newFilename}`;
+          downloadLink.style.display = 'block';
+          downloadLink.style.marginBottom = '0.5rem';
+          downloadLink.style.color = '#ffdede';
+          downloadLink.addEventListener('click', () => {
+            setTimeout(() => URL.revokeObjectURL(downloadLink.href), 100);
+          });
+
+          resultList.appendChild(downloadLink);
+
+        } catch (err) {
+          resultList.innerHTML += `<div style="color:#f33">Erro ao processar <strong>${file.name}</strong>: ${err.message}</div>`;
+        }
+      }
+
+      statusEl.textContent = 'Processamento concluído.';
+      processBtn.disabled = false;
+    });
+
+    function extractDateAndValue(text) {
+      let date = null;
+      const datePatterns = [
+        /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}\b/g,
+        /\b\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}\b/g
+      ];
+      for (const pattern of datePatterns) {
+        const matches = text.match(pattern);
+        if (matches && matches.length) {
+          for (const m of matches) {
+            const parsed = parseDate(m);
+            if (parsed) {
+              date = parsed;
+              break;
+            }
+          }
+        }
+        if (date) break;
+      }
+
+      let value = null;
+      let currencySymbol = '';
+      const valuePattern = /((R\$|US\$|€|\$)?\s?([\d{1,3}]+(?:[.,]\d{3})*(?:[.,]\d{2})))/g;
+      const matches = [];
+      let m;
+      while ((m = valuePattern.exec(text)) !== null) {
+        matches.push({ symbol: m[2] || '', raw: m[3] });
+      }
+
+      if (matches.length) {
+        const values = matches
+          .map(v => ({ symbol: v.symbol, val: parseValue(v.raw) }))
+          .filter(v => !isNaN(v.val));
+        if (values.length) {
+          const max = values.reduce((a, b) => (a.val > b.val ? a : b));
+          value = max.val.toFixed(2);
+          currencySymbol = max.symbol;
+        }
+      }
+
+      return { date, value, currencySymbol };
+    }
+
+    function parseDate(str) {
+      let d, m, y;
+      if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(str)) {
+        [d, m, y] = str.split(/[\/\-]/).map(Number);
+        return new Date(y, m - 1, d);
+      }
+      if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(str)) {
+        [y, m, d] = str.split(/[\/\-]/).map(Number);
+        return new Date(y, m - 1, d);
+      }
+      return null;
+    }
+
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function parseValue(str) {
+      str = str.trim();
+      if (str.includes(',') && str.includes('.')) {
+        str = str.replace(/\./g, '').replace(',', '.');
+      } else if (str.includes(',') && !str.includes('.')) {
+        str = str.replace(',', '.');
+      }
+      return parseFloat(str);
+    }
+
+    function formatValue(value) {
+      if (typeof value === 'number') value = value.toFixed(2);
+      return String(value).replace(/[^0-9.]/g, '');
+    }
+  </script>
+</body>
+</html>
